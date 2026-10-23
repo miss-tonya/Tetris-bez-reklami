@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тетрис</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://cdn.jsdelivr.net/npm/fontsource-inter@5.0.0/index.css');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: white;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .game-container {
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        canvas {
+            image-rendering: pixelated;
+        }
+
+        .btn-control {
+            user-select: none;
+            -webkit-user-select: none;
+            transition: transform 0.1s;
+        }
+        .btn-control:active {
+            transform: scale(0.95);
+            background-color: rgba(255,255,255,0.2);
+        }
+        
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            margin-top: -6px; 
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="h-screen w-full flex flex-col items-center justify-center bg-slate-900">
+
+    <!-- Main Layout -->
+    <div class="flex flex-col md:flex-row gap-6 items-start max-w-4xl w-full p-4 justify-center">
+        
+        <!-- Left Panel: Info & Settings -->
+        <div class="hidden md:flex flex-col gap-4 w-48 order-2 md:order-1">
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                <h2 class="text-slate-400 text-sm uppercase tracking-wider mb-1">Счет</h2>
+                <p id="score" class="text-3xl font-bold text-white">0</p>
+            </div>
+            
+            <!-- Speed Settings -->
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-slate-400 text-sm uppercase tracking-wider">Скорость</h2>
+                    <span id="speed-display" class="text-xs font-bold text-indigo-400">Норм</span>
+                </div>
+                <input type="range" id="speed-slider" min="1" max="5" step="1" value="3" class="w-full mb-2">
+                <div class="flex justify-between text-[10px] text-slate-500">
+                    <span>Медленно</span>
+                    <span>Безумно</span>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                <h2 class="text-slate-400 text-sm uppercase tracking-wider mb-1">Уровень</h2>
+                <p id="level" class="text-3xl font-bold text-yellow-400">1</p>
+            </div>
+            
+            <div class="mt-4 text-xs text-slate-500">
+                <p>← → : Движение</p>
+                <p>↑ : Поворот</p>
+                <p>↓ : Ускорение</p>
+                <p>Пробел : Сброс</p>
+            </div>
+        </div>
+
+        <!-- Center: Game Board -->
+        <div class="relative order-1 md:order-2 game-container rounded-lg overflow-hidden border-4 border-slate-700 bg-black">
+            <canvas id="tetris" width="240" height="400" class="block bg-slate-900"></canvas>
+            
+            <!-- Overlay for Start/Game Over -->
+            <div id="overlay" class="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-10 backdrop-blur-sm">
+                <h1 class="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 mb-4 tracking-tighter">ТЕТРИС</h1>
+                
+                <!-- Settings in Menu -->
+                <div class="mb-6 w-64">
+                    <label class="text-slate-300 text-sm block mb-2 text-center">Начальная скорость:</label>
+                    <input type="range" id="menu-speed-slider" min="1" max="5" step="1" value="3" class="w-full">
+                    <div class="flex justify-between text-xs text-slate-500 mt-1">
+                        <span>Черепаха</span>
+                        <span id="menu-speed-val" class="text-white">Нормально</span>
+                        <span>Ракета</span>
+                    </div>
+                </div>
+
+                <p id="final-score" class="text-xl text-slate-300 mb-8 hidden">Игра окончена! Счет: <span class="font-bold text-white">0</span></p>
+                <button id="start-btn" class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-full shadow-lg transform transition hover:scale-105 active:scale-95">
+                    ИГРАТЬ
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Panel: Next Piece & Mobile Stats -->
+        <div class="flex flex-col gap-4 w-full md:w-48 order-3">
+            <!-- Mobile Stats -->
+            <div class="flex md:hidden justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
+                <div>
+                    <span class="text-xs text-slate-400 block">СЧЕТ</span>
+                    <span id="score-mobile" class="font-bold">0</span>
+                </div>
+                <div>
+                    <span class="text-xs text-slate-400 block">ЛИНИИ</span>
+                    <span id="lines-mobile" class="font-bold">0</span>
+                </div>
+            </div>
+
+            <!-- Next Piece Preview -->
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700 flex flex-col items-center h-48 justify-center relative">
+                <h2 class="absolute top-4 left-4 text-slate-400 text-sm uppercase tracking-wider">Следующий</h2>
+                <canvas id="next-piece" width="100" height="100" class="mt-2"></canvas>
+            </div>
+            
+            <!-- Mobile Controls -->
+            <div class="md:hidden grid grid-cols-3 gap-2 mt-2 select-none">
+                <div class="col-start-2">
+                    <button id="btn-rotate" class="btn-control w-full h-14 bg-slate-700 rounded-lg flex items-center justify-center text-2xl shadow-md">↻</button>
+                </div>
+                <div class="col-start-1 row-start-2">
+                    <button id="btn-left" class="btn-control w-full h-14 bg-slate-700 rounded-lg flex items-center justify-center text-2xl shadow-md">←</button>
+                </div>
+                <div class="col-start-2 row-start-2">
+                    <button id="btn-down" class="btn-control w-full h-14 bg-slate-700 rounded-lg flex items-center justify-center text-2xl shadow-md">↓</button>
+                </div>
+                <div class="col-start-3 row-start-2">
+                    <button id="btn-right" class="btn-control w-full h-14 bg-slate-700 rounded-lg flex items-center justify-center text-2xl shadow-md">→</button>
+                </div>
+                <div class="col-start-2 row-start-3">
+                    <button id="btn-drop" class="btn-control w-full h-14 bg-red-900/80 rounded-lg flex items-center justify-center text-xl font-bold shadow-md">DROP</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('tetris');
+        const context = canvas.getContext('2d');
+        const nextCanvas = document.getElementById('next-piece');
+        const nextContext = nextCanvas.getContext('2d');
+
+        context.scale(20, 20);
+        nextContext.scale(20, 20);
+
+        const colors = [
+            null,
+            '#FF0D72', // T
+            '#0DC2FF', // I
+            '#0DFF72', // S
+            '#F538FF', // Z
+            '#FF8E0D', // L
+            '#FFE138', // O
+            '#3877FF', // J
+        ];
+
+        function createPiece(type) {
+            if (type === 'I') {
+                return [
+                    [0, 1, 0, 0],
+                    [0, 1, 0, 0],
+                    [0, 1, 0, 0],
+                    [0, 1, 0, 0],
+                ];
+            } else if (type === 'L') {
+                return [
+                    [0, 2, 0],
+                    [0, 2, 0],
+                    [0, 2, 2],
+                ];
+            } else if (type === 'J') {
+                return [
+                    [0, 3, 0],
+                    [0, 3, 0],
+                    [3, 3, 0],
+                ];
+            } else if (type === 'O') {
+                return [
+                    [4, 4],
+                    [4, 4],
+                ];
+            } else if (type === 'Z') {
+                return [
+                    [5, 5, 0],
+                    [0, 5, 5],
+                    [0, 0, 0],
+                ];
+            } else if (type === 'S') {
+                return [
+                    [0, 6, 6],
+                    [6, 6, 0],
+                    [0, 0, 0],
+                ];
+            } else if (type === 'T') {
+                return [
+                    [0, 7, 0],
+                    [7, 7, 7],
+                    [0, 0, 0],
+                ];
+            }
+        }
+
+        function createMatrix(w, h) {
+            const matrix = [];
+            while (h--) {
+                matrix.push(new Array(w).fill(0));
+            }
+            return matrix;
+        }
+
+        function collide(arena, player) {
+            const m = player.matrix;
+            const o = player.pos;
+            for (let y = 0; y < m.length; ++y) {
+                for (let x = 0; x < m[y].length; ++x) {
+                    if (m[y][x] !== 0 &&
+                       (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function draw() {
+            context.fillStyle = '#0f172a';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            drawMatrix(arena, {x: 0, y: 0}, context);
+            drawMatrix(player.matrix, player.pos, context);
+        }
+
+        function drawNext() {
+            nextContext.fillStyle = '#1e293b';
+            nextContext.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+            const xOffset = (5 - nextPlayer.matrix[0].length) / 2;
+            const yOffset = (5 - nextPlayer.matrix.length) / 2;
+            drawMatrix(nextPlayer.matrix, {x: xOffset, y: yOffset}, nextContext);
+        }
+
+        function drawMatrix(matrix, offset, ctx) {
+            matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        ctx.fillStyle = colors[value];
+                        ctx.fillRect(x + offset.x, y + offset.y, 1, 1);
+                        ctx.lineWidth = 0.05;
+                        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                        ctx.strokeRect(x + offset.x, y + offset.y, 1, 1);
+                        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                        ctx.fillRect(x + offset.x + 0.1, y + offset.y + 0.8, 0.8, 0.1);
+                        ctx.fillRect(x + offset.x + 0.8, y + offset.y + 0.1, 0.1, 0.8);
+                    }
+                });
+            });
+        }
+
+        function merge(arena, player) {
+            player.matrix.forEach((row, y) => {
+                row.forEach((value, x) => {
+                    if (value !== 0) {
+                        arena[y + player.pos.y][x + player.pos.x] = value;
+                    }
+                });
+            });
+        }
+
+        function rotate(matrix, dir) {
+            for (let y = 0; y < matrix.length; ++y) {
+                for (let x = 0; x < y; ++x) {
+                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
+                }
+            }
+            if (dir > 0) {
+                matrix.forEach(row => row.reverse());
+            } else {
+                matrix.reverse();
+            }
+        }
+
+        function playerDrop() {
+            player.pos.y++;
+            if (collide(arena, player)) {
+                player.pos.y--;
+                merge(arena, player);
+                playerReset();
+                arenaSweep();
+                updateScore();
+            }
+            dropCounter = 0;
+        }
+
+        function playerHardDrop() {
+            while (!collide(arena, player)) {
+                player.pos.y++;
+            }
+            player.pos.y--;
+            merge(arena, player);
+            playerReset();
+            arenaSweep();
+            updateScore();
+            dropCounter = 0;
+        }
+
+        function playerMove(offset) {
+            player.pos.x += offset;
+            if (collide(arena, player)) {
+                player.pos.x -= offset;
+            }
+        }
+
+        function playerReset() {
+            player.matrix = nextPlayer.matrix;
+            const pieces = 'ILJOTSZ';
+            const type = pieces[pieces.length * Math.random() | 0];
+            nextPlayer.matrix = createPiece(type);
+            player.pos.y = 0;
+            player.pos.x = (arena[0].length / 2 | 0) - (player.matrix[0].length / 2 | 0);
+            if (collide(arena, player)) {
+                gameOver();
+            }
+            drawNext();
+        }
+
+        function playerRotate(dir) {
+            const pos = player.pos.x;
+            let offset = 1;
+            rotate(player.matrix, dir);
+            while (collide(arena, player)) {
+                player.pos.x += offset;
+                offset = -(offset + (offset > 0 ? 1 : -1));
+                if (offset > player.matrix[0].length) {
+                    rotate(player.matrix, -dir);
+                    player.pos.x = pos;
+                    return;
+                }
+            }
+        }
+
+        function arenaSweep() {
+            let rowCount = 0;
+            outer: for (let y = arena.length -1; y > 0; --y) {
+                for (let x = 0; x < arena[y].length; ++x) {
+                    if (arena[y][x] === 0) {
+                        continue outer;
+                    }
+                }
+                const row = arena.splice(y, 1)[0].fill(0);
+                arena.unshift(row);
+                ++y;
+                rowCount++;
+            }
+            if (rowCount > 0) {
+                const lineScores = [0, 40, 100, 300, 1200];
+                player.score += lineScores[rowCount] * (player.level + 1);
+                player.lines += rowCount;
+                player.level = Math.floor(player.lines / 10);
+                // Speed increases slightly with level, but respects base setting
+                updateSpeedFromSlider(); 
+            }
+        }
+
+        function updateScore() {
+            document.getElementById('score').innerText = player.score;
+            document.getElementById('score-mobile').innerText = player.score;
+            document.getElementById('level').innerText = player.level + 1;
+        }
+
+        function gameOver() {
+            isPaused = true;
+            document.getElementById('overlay').classList.remove('hidden');
+            document.getElementById('overlay').style.display = 'flex';
+            document.getElementById('final-score').classList.remove('hidden');
+            document.getElementById('final-score').querySelector('span').innerText = player.score;
+            document.getElementById('start-btn').innerText = "ЗАНОВО";
+        }
+
+        // --- SPEED CONTROL LOGIC ---
+        const speedLabels = ["Очень медленно", "Медленно", "Нормально", "Быстро", "Безумно"];
+        const speedValues = [1200, 800, 500, 250, 100]; // ms per drop
+        
+        let baseSpeedIndex = 2; // Default Normal
+
+        function updateSpeedFromSlider() {
+            // Base speed from slider minus a bit for level progression
+            let currentSpeed = speedValues[baseSpeedIndex] - (player.level * 20);
+            dropInterval = Math.max(50, currentSpeed); // Cap at 50ms
+            
+            // Update UI text
+            const label = speedLabels[baseSpeedIndex];
+            document.getElementById('speed-display').innerText = label;
+        }
+
+        function handleSliderChange(e) {
+            baseSpeedIndex = parseInt(e.target.value) - 1;
+            // Sync both sliders
+            document.getElementById('speed-slider').value = e.target.value;
+            document.getElementById('menu-speed-slider').value = e.target.value;
+            document.getElementById('menu-speed-val').innerText = speedLabels[baseSpeedIndex];
+            updateSpeedFromSlider();
+        }
+
+        document.getElementById('speed-slider').addEventListener('input', handleSliderChange);
+        document.getElementById('menu-speed-slider').addEventListener('input', handleSliderChange);
+
+        // ---------------------------
+
+        function resetGame() {
+            arena.forEach(row => row.fill(0));
+            player.score = 0;
+            player.lines = 0;
+            player.level = 0;
+            
+            // Reset speed based on slider
+            updateSpeedFromSlider();
+            
+            const pieces = 'ILJOTSZ';
+            let type = pieces[pieces.length * Math.random() | 0];
+            nextPlayer.matrix = createPiece(type);
+            playerReset();
+            
+            isPaused = false;
+            document.getElementById('overlay').style.display = 'none';
+            update();
+        }
+
+        let dropCounter = 0;
+        let dropInterval = 500;
+        let lastTime = 0;
+        let isPaused = true;
+
+        const arena = createMatrix(12, 20);
+
+        const player = {
+            pos: {x: 0, y: 0},
+            matrix: null,
+            score: 0,
+            lines: 0,
+            level: 0,
+        };
+
+        const nextPlayer = {
+            matrix: null,
+        };
+
+        function update(time = 0) {
+            if (isPaused) return;
+            const deltaTime = time - lastTime;
+            lastTime = time;
+            dropCounter += deltaTime;
+            if (dropCounter > dropInterval) {
+                playerDrop();
+            }
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        document.addEventListener('keydown', event => {
+            if (isPaused) return;
+            if (event.keyCode === 37) playerMove(-1);
+            else if (event.keyCode === 39) playerMove(1);
+            else if (event.keyCode === 40) playerDrop();
+            else if (event.keyCode === 38) playerRotate(1);
+            else if (event.keyCode === 32) playerHardDrop();
+        });
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            resetGame();
+        });
+
+        // Mobile Controls
+        const bindTouch = (id, action) => {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); if(!isPaused) action(); });
+            btn.addEventListener('mousedown', () => { if(!isPaused) action(); });
+        };
+
+        bindTouch('btn-left', () => playerMove(-1));
+        bindTouch('btn-right', () => playerMove(1));
+        bindTouch('btn-down', () => playerDrop());
+        bindTouch('btn-rotate', () => playerRotate(1));
+        bindTouch('btn-drop', () => playerHardDrop());
+
+        // Initialize UI
+        updateSpeedFromSlider();
+    </script>
+</body>
+</html>
